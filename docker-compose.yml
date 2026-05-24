@@ -1,0 +1,12 @@
+services:
+  whatsapp-summary:
+    build: .
+    restart: "no"
+    env_file: .env
+    volumes:
+      - session:/app/.wwebjs_auth
+      - session-cache:/app/.wwebjs_cache
+
+volumes:
+  session:
+  session-cache:

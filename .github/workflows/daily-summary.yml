@@ -1,0 +1,18 @@
+name: Daily WhatsApp Summary
+
+on:
+  schedule:
+    # 8PM Europe/Madrid = 18:00 UTC summer (CEST) / 19:00 UTC winter (CET)
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Wake Fly.io machine
+        run: flyctl machine start ${{ secrets.FLY_MACHINE_ID }} --app whatsapp-summary
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

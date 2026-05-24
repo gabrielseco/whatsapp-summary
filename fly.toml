@@ -1,0 +1,27 @@
+app = "whatsapp-summary"
+primary_region = "cdg"
+
+[build]
+
+[env]
+  TZ = "Europe/Madrid"
+
+# Session data persists between runs
+[[mounts]]
+  source = "whatsapp_session"
+  destination = "/app/.wwebjs_auth"
+
+# Machine stops after the process exits, costs $0 while stopped
+[machines]
+  auto_stop_machines = "stop"
+  auto_start_machines = false
+  min_machines_running = 0
+
+[[restart]]
+  policy = "on-failure"
+  max_retries = 0
+
+[[vm]]
+  memory = "1gb"
+  cpus = 1
+  cpu_kind = "shared"
