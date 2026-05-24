@@ -5,7 +5,10 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "setup": "node src/setup.js"
+    "setup": "node src/setup.js",
+    "lint": "oxlint src/",
+    "format": "oxfmt src/",
+    "check": "oxlint src/ && oxfmt --check src/"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -14,5 +17,10 @@
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "^1.23.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.15",
+    "oxfmt": "^0.51.0",
+    "oxlint": "^1.66.0"
   }
 }

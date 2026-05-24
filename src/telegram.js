@@ -1,4 +1,4 @@
-const TelegramBot = require('node-telegram-bot-api');
+const TelegramBot = require("node-telegram-bot-api");
 
 let bot;
 
@@ -8,14 +8,14 @@ function createBot() {
 }
 
 async function sendSummary(summary) {
-  const date = new Date().toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
+  const date = new Date().toLocaleDateString("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
   });
   const message = `*WhatsApp Digest — ${date}*\n\n${summary}`;
   await bot.sendMessage(process.env.TELEGRAM_CHAT_ID, message, {
-    parse_mode: 'Markdown',
+    parse_mode: "Markdown",
   });
 }
 

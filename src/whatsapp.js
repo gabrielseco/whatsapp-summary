@@ -1,5 +1,5 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const QRCode = require('qrcode');
+const { Client, LocalAuth } = require("whatsapp-web.js");
+const QRCode = require("qrcode");
 
 let client;
 let telegramBot;
@@ -15,33 +15,33 @@ function createClient() {
     authStrategy: new LocalAuth(),
     puppeteer: {
       args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-first-run',
-        '--no-zygote',
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--no-first-run",
+        "--no-zygote",
       ],
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
     },
   });
 
-  client.on('qr', async (qr) => {
-    console.log('QR code received, sending to Telegram...');
+  client.on("qr", async (qr) => {
+    console.log("QR code received, sending to Telegram...");
     try {
       const buffer = await QRCode.toBuffer(qr, { scale: 8 });
       await telegramBot.sendPhoto(telegramChatId, buffer, {
-        caption: 'Scan this QR code with WhatsApp (Settings → Linked Devices)',
+        caption: "Scan this QR code with WhatsApp (Settings → Linked Devices)",
       });
-      console.log('QR sent to Telegram');
+      console.log("QR sent to Telegram");
     } catch (err) {
-      console.error('Failed to send QR to Telegram:', err.message);
+      console.error("Failed to send QR to Telegram:", err.message);
     }
   });
 
-  client.on('ready', () => console.log('WhatsApp client ready'));
-  client.on('auth_failure', (msg) => console.error('WhatsApp auth failed:', msg));
-  client.on('disconnected', (reason) => console.warn('WhatsApp disconnected:', reason));
+  client.on("ready", () => console.log("WhatsApp client ready"));
+  client.on("auth_failure", (msg) => console.error("WhatsApp auth failed:", msg));
+  client.on("disconnected", (reason) => console.warn("WhatsApp disconnected:", reason));
 
   return client;
 }
@@ -66,11 +66,11 @@ async function getRecentMessages(hoursBack = 24) {
       chatName: chat.name,
       isGroup: chat.isGroup,
       messages: recent.map((m) => ({
-        from: m._data.notifyName || m.from.split('@')[0],
-        body: m.hasMedia ? '[Media]' : m.body || '[no text]',
-        time: new Date(m.timestamp * 1000).toLocaleTimeString('en-GB', {
-          hour: '2-digit',
-          minute: '2-digit',
+        from: m._data.notifyName || m.from.split("@")[0],
+        body: m.hasMedia ? "[Media]" : m.body || "[no text]",
+        time: new Date(m.timestamp * 1000).toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
         }),
       })),
     });
@@ -79,4 +79,4 @@ async function getRecentMessages(hoursBack = 24) {
   return results;
 }
 
-module.exports = { createClient, getRecentMessages };
+module.exports = { createClient, getRecentMessages, setTelegram };
