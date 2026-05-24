@@ -1,7 +1,14 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode');
 
 let client;
+let telegramBot;
+let telegramChatId;
+
+function setTelegram(bot, chatId) {
+  telegramBot = bot;
+  telegramChatId = chatId;
+}
 
 function createClient() {
   client = new Client({
@@ -19,16 +26,21 @@ function createClient() {
     },
   });
 
-  client.on('qr', (qr) => {
-    console.log('\nScan this QR code with WhatsApp (Settings > Linked Devices):\n');
-    qrcode.generate(qr, { small: true });
-    console.log('\nWaiting for scan...\n');
+  client.on('qr', async (qr) => {
+    console.log('QR code received, sending to Telegram...');
+    try {
+      const buffer = await QRCode.toBuffer(qr, { scale: 8 });
+      await telegramBot.sendPhoto(telegramChatId, buffer, {
+        caption: 'Scan this QR code with WhatsApp (Settings → Linked Devices)',
+      });
+      console.log('QR sent to Telegram');
+    } catch (err) {
+      console.error('Failed to send QR to Telegram:', err.message);
+    }
   });
 
   client.on('ready', () => console.log('WhatsApp client ready'));
-
   client.on('auth_failure', (msg) => console.error('WhatsApp auth failed:', msg));
-
   client.on('disconnected', (reason) => console.warn('WhatsApp disconnected:', reason));
 
   return client;

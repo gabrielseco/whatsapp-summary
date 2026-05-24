@@ -1,10 +1,11 @@
 require('dotenv').config();
-const { createClient, getRecentMessages } = require('./whatsapp');
+const { createClient, getRecentMessages, setTelegram } = require('./whatsapp');
 const { summarize } = require('./summarizer');
 const { createBot, sendSummary, sendMessage } = require('./telegram');
 
 async function main() {
-  createBot();
+  const bot = createBot();
+  setTelegram(bot, process.env.TELEGRAM_CHAT_ID);
   const client = createClient();
 
   // Wait for WhatsApp session to load (saved session = no QR needed)
