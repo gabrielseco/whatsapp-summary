@@ -14,6 +14,26 @@ jobs:
       - name: Install flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Wake machine
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl machine start --app whatsapp-summary || true
+
+      - name: Wait for WhatsApp to be ready
+        run: |
+          echo "Polling until WhatsApp is initialized..."
+          for i in $(seq 1 40); do
+            result=$(curl --max-time 10 -sf https://whatsapp-summary.fly.dev/health 2>/dev/null || echo "{}")
+            if echo "$result" | grep -q '"whatsappReady":true'; then
+              echo "WhatsApp is ready after attempt $i"
+              exit 0
+            fi
+            echo "Attempt $i/40: not ready yet, waiting 15s..."
+            sleep 15
+          done
+          echo "WhatsApp failed to initialize within 10 minutes"
+          exit 1
+
       - name: Stream logs (background)
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
