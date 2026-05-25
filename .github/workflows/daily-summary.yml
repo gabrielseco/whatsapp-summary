@@ -17,7 +17,7 @@ jobs:
       - name: Stream logs (background)
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: fly logs --app whatsapp-summary &
+        run: flyctl logs --app whatsapp-summary &
 
       - name: Trigger summary
         env:
