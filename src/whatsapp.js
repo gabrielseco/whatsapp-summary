@@ -23,7 +23,7 @@ function createClient() {
         "--no-zygote",
       ],
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      protocolTimeout: 300000,
+      protocolTimeout: 600000,
     },
   });
 

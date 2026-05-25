@@ -18,14 +18,17 @@ function requireAuth(req, res, next) {
 const bot = createBot();
 setTelegram(bot, process.env.TELEGRAM_CHAT_ID);
 
+let whatsappIsReady = false;
+
 const whatsappReady = new Promise((resolve, reject) => {
   const client = createClient();
   const timeout = setTimeout(
-    () => reject(new Error("WhatsApp auth timeout after 300s")),
-    300_000,
+    () => reject(new Error("WhatsApp auth timeout after 600s")),
+    600_000,
   );
   client.on("ready", () => {
     clearTimeout(timeout);
+    whatsappIsReady = true;
     resolve();
   });
   client.on("auth_failure", (msg) => {
@@ -36,7 +39,7 @@ const whatsappReady = new Promise((resolve, reject) => {
 });
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true });
+  res.json({ ok: true, whatsappReady: whatsappIsReady });
 });
 
 app.post("/summary", requireAuth, async (req, res) => {
