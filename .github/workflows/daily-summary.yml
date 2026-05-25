@@ -11,7 +11,17 @@ jobs:
   trigger:
     runs-on: ubuntu-latest
     steps:
+      - name: Install flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Stream logs (background)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: fly logs --app whatsapp-summary &
+
       - name: Trigger summary
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           curl --fail --max-time 600 -s -X POST \
             https://whatsapp-summary.fly.dev/summary \
