@@ -1,0 +1,22 @@
+name: Warmup WhatsApp Machine
+
+on:
+  schedule:
+    - cron: '55 7 * * *'
+    - cron: '55 10 * * *'
+    - cron: '55 17 * * *'
+  workflow_dispatch:
+
+jobs:
+  warmup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Wake machine
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl machine start --app whatsapp-summary || true
+          curl --max-time 30 -sf https://whatsapp-summary.fly.dev/health || true
