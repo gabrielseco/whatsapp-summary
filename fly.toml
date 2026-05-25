@@ -11,10 +11,11 @@ primary_region = "cdg"
   source = "whatsapp_session"
   destination = "/app/.wwebjs_auth"
 
-# Machine stops after the process exits, costs $0 while stopped
-[machines]
+[http_service]
+  internal_port = 3000
+  force_https = true
   auto_stop_machines = "stop"
-  auto_start_machines = false
+  auto_start_machines = true
   min_machines_running = 0
 
 [[restart]]
