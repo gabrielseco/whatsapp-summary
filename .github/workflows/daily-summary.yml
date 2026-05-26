@@ -14,11 +14,6 @@ jobs:
       - name: Install flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Wake machine
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl machine start --app whatsapp-summary || true
-
       - name: Wait for WhatsApp to be ready
         run: |
           echo "Polling until WhatsApp is initialized..."
