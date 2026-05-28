@@ -1,4 +1,5 @@
 require("dotenv").config();
+const https = require("https");
 const express = require("express");
 const { createClient, getRecentMessages, setTelegram } = require("./whatsapp");
 const { summarize } = require("./summarizer");
@@ -58,5 +59,24 @@ app.post("/summary", requireAuth, async (req, res) => {
   }
 });
 
+function startKeepAlive() {
+  const appName = process.env.FLY_APP_NAME;
+  if (!appName) return;
+  const url = `https://${appName}.fly.dev/health`;
+  let elapsed = 0;
+  const interval = setInterval(() => {
+    if (whatsappIsReady || elapsed >= 15 * 60) {
+      clearInterval(interval);
+      return;
+    }
+    elapsed += 10;
+    https.get(url, (res) => res.resume()).on("error", () => {});
+  }, 10_000);
+  interval.unref();
+}
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
+  startKeepAlive();
+});
