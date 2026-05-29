@@ -4,6 +4,7 @@ const QRCode = require("qrcode");
 let client;
 let telegramBot;
 let telegramChatId;
+let qrMessageId = null;
 
 function setTelegram(bot, chatId) {
   telegramBot = bot;
@@ -31,16 +32,29 @@ function createClient() {
     console.log("QR code received, sending to Telegram...");
     try {
       const buffer = await QRCode.toBuffer(qr, { scale: 8 });
-      await telegramBot.sendPhoto(telegramChatId, buffer, {
-        caption: "Scan this QR code with WhatsApp (Settings → Linked Devices)",
+
+      if (qrMessageId) {
+        try { await telegramBot.deleteMessage(telegramChatId, qrMessageId); } catch {}
+        qrMessageId = null;
+      }
+
+      const msg = await telegramBot.sendPhoto(telegramChatId, buffer, {
+        caption: "Scan this QR code with WhatsApp (Settings → Linked Devices)\n⏱ Refreshes every ~20s — scan the latest one",
       });
+      qrMessageId = msg.message_id;
       console.log("QR sent to Telegram");
     } catch (err) {
       console.error("Failed to send QR to Telegram:", err.message);
     }
   });
 
-  client.on("ready", () => console.log("WhatsApp client ready"));
+  client.on("ready", () => {
+    if (qrMessageId) {
+      telegramBot.deleteMessage(telegramChatId, qrMessageId).catch(() => {});
+      qrMessageId = null;
+    }
+    console.log("WhatsApp client ready");
+  });
   client.on("auth_failure", (msg) => console.error("WhatsApp auth failed:", msg));
   client.on("disconnected", (reason) => console.warn("WhatsApp disconnected:", reason));
 
