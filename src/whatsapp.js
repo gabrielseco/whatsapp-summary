@@ -5,7 +5,6 @@ const {
   fetchLatestBaileysVersion,
   makeInMemoryStore,
 } = require("@whiskeysockets/baileys");
-const { Boom } = require("@hapi/boom");
 const QRCode = require("qrcode");
 const pino = require("pino");
 const fs = require("fs");
