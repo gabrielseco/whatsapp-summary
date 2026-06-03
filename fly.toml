@@ -9,7 +9,7 @@ primary_region = "cdg"
 # Session data persists between runs
 [[mounts]]
   source = "whatsapp_session"
-  destination = "/app/.wwebjs_auth"
+  destination = "/app/.wa_auth"
 
 [http_service]
   internal_port = 3000

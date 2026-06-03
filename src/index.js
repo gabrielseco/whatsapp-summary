@@ -1,7 +1,7 @@
 require("dotenv").config();
 const https = require("https");
 const express = require("express");
-const { createClient, getRecentMessages, setTelegram } = require("./whatsapp");
+const { connect, getRecentMessages, setTelegram, isConnected } = require("./whatsapp");
 const { summarize } = require("./summarizer");
 const { createBot, sendSummary, sendMessage } = require("./telegram");
 
@@ -19,28 +19,14 @@ function requireAuth(req, res, next) {
 const bot = createBot();
 setTelegram(bot, process.env.TELEGRAM_CHAT_ID);
 
-let whatsappIsReady = false;
-
-const whatsappReady = new Promise((resolve, reject) => {
-  const client = createClient();
-  const timeout = setTimeout(
-    () => reject(new Error("WhatsApp auth timeout after 600s")),
-    600_000,
-  );
-  client.on("ready", () => {
-    clearTimeout(timeout);
-    whatsappIsReady = true;
-    resolve();
-  });
-  client.on("auth_failure", (msg) => {
-    clearTimeout(timeout);
-    reject(new Error(msg));
-  });
-  client.initialize().catch(reject);
+const whatsappReady = connect();
+whatsappReady.catch((err) => {
+  console.error("Fatal: WhatsApp init failed:", err.message);
+  process.exit(1);
 });
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, whatsappReady: whatsappIsReady });
+  res.json({ ok: true, whatsappReady: isConnected() });
 });
 
 app.post("/summary", requireAuth, async (req, res) => {
@@ -65,7 +51,7 @@ function startKeepAlive() {
   const url = `https://${appName}.fly.dev/health`;
   let elapsed = 0;
   const interval = setInterval(() => {
-    if (whatsappIsReady || elapsed >= 15 * 60) {
+    if (isConnected() || elapsed >= 15 * 60) {
       clearInterval(interval);
       return;
     }
