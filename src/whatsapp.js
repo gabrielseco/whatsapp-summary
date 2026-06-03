@@ -9,6 +9,7 @@ const pino = require("pino");
 const fs = require("fs");
 
 const AUTH_FOLDER = process.env.WA_AUTH_FOLDER || ".wa_auth";
+const MSG_STORE_FILE = `${AUTH_FOLDER}/msg_store.json`;
 const SILENT = pino({ level: "silent" });
 
 let sock = null;
@@ -20,6 +21,41 @@ let connected = false;
 // Minimal in-memory store (makeInMemoryStore was removed in Baileys 6.7)
 const chatMeta = new Map(); // jid → { name, isGroup }
 const msgStore = new Map(); // jid → proto.IWebMessageInfo[]
+
+function loadMsgStore() {
+  try {
+    if (!fs.existsSync(MSG_STORE_FILE)) return;
+    const raw = JSON.parse(fs.readFileSync(MSG_STORE_FILE, "utf8"));
+    const cutoff = Date.now() - 25 * 60 * 60 * 1000; // keep up to 25h
+    for (const [jid, msgs] of Object.entries(raw.msgs || {})) {
+      const fresh = msgs.filter((m) => Number(m.messageTimestamp) * 1000 > cutoff);
+      if (fresh.length) msgStore.set(jid, fresh);
+    }
+    for (const [jid, meta] of Object.entries(raw.chats || {})) {
+      chatMeta.set(jid, meta);
+    }
+    console.log(`Loaded msg store: ${msgStore.size} chats`);
+  } catch (e) {
+    console.warn("Could not load msg store:", e.message);
+  }
+}
+
+let saveTimer = null;
+function scheduleSave() {
+  if (saveTimer) return;
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    try {
+      const data = {
+        chats: Object.fromEntries(chatMeta),
+        msgs: Object.fromEntries(msgStore),
+      };
+      fs.writeFileSync(MSG_STORE_FILE, JSON.stringify(data));
+    } catch (e) {
+      console.warn("Could not save msg store:", e.message);
+    }
+  }, 2_000);
+}
 
 function setTelegram(bot, chatId) {
   telegramBot = bot;
@@ -58,6 +94,7 @@ function storeChats(chats) {
       });
     }
   }
+  scheduleSave();
 }
 
 function storeMessages(msgs) {
@@ -67,9 +104,11 @@ function storeMessages(msgs) {
     if (!msgStore.has(jid)) msgStore.set(jid, []);
     msgStore.get(jid).push(msg);
   }
+  scheduleSave();
 }
 
 async function connect() {
+  loadMsgStore();
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
   const { version } = await fetchLatestBaileysVersion();
 
