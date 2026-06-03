@@ -102,7 +102,9 @@ function storeMessages(msgs) {
     const jid = msg.key?.remoteJid;
     if (!jid || jid === "status@broadcast") continue;
     if (!msgStore.has(jid)) msgStore.set(jid, []);
-    msgStore.get(jid).push(msg);
+    const existing = msgStore.get(jid);
+    const id = msg.key.id;
+    if (!existing.some((m) => m.key.id === id)) existing.push(msg);
   }
   scheduleSave();
 }
