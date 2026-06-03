@@ -3,21 +3,23 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
-  makeInMemoryStore,
 } = require("@whiskeysockets/baileys");
 const QRCode = require("qrcode");
 const pino = require("pino");
 const fs = require("fs");
 
-const AUTH_FOLDER = process.env.WA_AUTH_FOLDER || "/app/.wa_auth";
+const AUTH_FOLDER = process.env.WA_AUTH_FOLDER || ".wa_auth";
 const SILENT = pino({ level: "silent" });
 
 let sock = null;
-let store = null;
 let telegramBot = null;
 let telegramChatId = null;
 let qrMessageId = null;
 let connected = false;
+
+// Minimal in-memory store (makeInMemoryStore was removed in Baileys 6.7)
+const chatMeta = new Map(); // jid → { name, isGroup }
+const msgStore = new Map(); // jid → proto.IWebMessageInfo[]
 
 function setTelegram(bot, chatId) {
   telegramBot = bot;
@@ -47,11 +49,29 @@ async function sendQRToTelegram(qr) {
   }
 }
 
+function storeChats(chats) {
+  for (const chat of chats || []) {
+    if (chat.id) {
+      chatMeta.set(chat.id, {
+        name: chat.name || chat.id.split("@")[0],
+        isGroup: chat.id.endsWith("@g.us"),
+      });
+    }
+  }
+}
+
+function storeMessages(msgs) {
+  for (const msg of msgs || []) {
+    const jid = msg.key?.remoteJid;
+    if (!jid || jid === "status@broadcast") continue;
+    if (!msgStore.has(jid)) msgStore.set(jid, []);
+    msgStore.get(jid).push(msg);
+  }
+}
+
 async function connect() {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
   const { version } = await fetchLatestBaileysVersion();
-
-  store = makeInMemoryStore({ logger: SILENT });
 
   sock = makeWASocket({
     version,
@@ -62,8 +82,15 @@ async function connect() {
     markOnlineOnConnect: false,
   });
 
-  store.bind(sock.ev);
   sock.ev.on("creds.update", saveCreds);
+
+  sock.ev.on("chats.set", ({ chats }) => storeChats(chats));
+  sock.ev.on("chats.upsert", (chats) => storeChats(chats));
+  sock.ev.on("messaging-history.set", ({ messages, chats }) => {
+    storeChats(chats);
+    storeMessages(messages);
+  });
+  sock.ev.on("messages.upsert", ({ messages }) => storeMessages(messages));
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(
@@ -92,8 +119,7 @@ async function connect() {
         }
         console.log("WhatsApp connected, waiting for message sync...");
 
-        // Wait for offline messages to finish arriving before resolving.
-        // Resolves 3s after the last message.upsert, or after 20s max.
+        // Resolve 3s after the last incoming message batch, or after 20s max.
         let quietTimer = null;
         const done = () => {
           clearTimeout(quietTimer);
@@ -117,10 +143,12 @@ async function connect() {
 
         if (!settled) {
           if (loggedOut) {
-            // Stale auth — clear it so the next process start generates a fresh QR
             fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
           }
-          settle(reject, new Error(loggedOut ? "WhatsApp logged out" : `Connect failed: ${statusCode}`));
+          settle(
+            reject,
+            new Error(loggedOut ? "WhatsApp logged out" : `Connect failed: ${statusCode}`),
+          );
           return;
         }
 
@@ -130,7 +158,6 @@ async function connect() {
           process.exit(1);
         }
 
-        // Transient disconnect — reconnect silently
         setTimeout(
           () =>
             connect().catch((e) => {
@@ -161,37 +188,28 @@ async function getRecentMessages(hoursBack = 24) {
   const since = Date.now() - hoursBack * 60 * 60 * 1000;
   const results = [];
 
-  const jids = Object.keys(store.messages);
-  console.log(`Store has messages for ${jids.length} chats`);
+  console.log(`Store has messages for ${msgStore.size} chats`);
 
-  for (const jid of jids) {
-    if (jid === "status@broadcast") continue;
-
-    const msgArray = store.messages[jid]?.array || [];
-    const recent = msgArray.filter((msg) => {
+  for (const [jid, msgs] of msgStore.entries()) {
+    const recent = msgs.filter((msg) => {
       const ts = Number(msg.messageTimestamp) * 1000;
       return ts > since && !msg.key.fromMe;
     });
 
     if (recent.length === 0) continue;
 
-    const chat = store.chats.get(jid);
-    const isGroup = jid.endsWith("@g.us");
-    const chatName = chat?.name || jid.split("@")[0];
+    const meta = chatMeta.get(jid) || {
+      name: jid.split("@")[0],
+      isGroup: jid.endsWith("@g.us"),
+    };
 
     results.push({
-      chatName,
-      isGroup,
+      chatName: meta.name,
+      isGroup: meta.isGroup,
       messages: recent.map((msg) => {
         const ts = Number(msg.messageTimestamp) * 1000;
         const senderJid = msg.key.participant || msg.key.remoteJid;
-        const contact = store.contacts[senderJid];
-        const from =
-          msg.pushName ||
-          contact?.notify ||
-          contact?.name ||
-          senderJid?.split("@")[0] ||
-          "Unknown";
+        const from = msg.pushName || senderJid?.split("@")[0] || "Unknown";
         return {
           from,
           body: extractText(msg) || "[Media]",
