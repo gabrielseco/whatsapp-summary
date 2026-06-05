@@ -285,7 +285,9 @@ async function getRecentMessages(hoursBack = 24) {
       messages: recent.map((msg) => {
         const ts = Number(msg.messageTimestamp) * 1000;
         const senderJid = msg.key.participant || msg.key.remoteJid;
-        const from = msg.pushName || senderJid?.split("@")[0] || "Unknown";
+        const from = msg.key.fromMe
+          ? "Me"
+          : msg.pushName || senderJid?.split("@")[0] || "Unknown";
         return {
           from,
           body: extractText(msg) || "[Media]",
