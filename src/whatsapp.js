@@ -266,7 +266,10 @@ async function getRecentMessages(hoursBack = 24) {
     if (jid.endsWith("@lid")) continue; // skip device-sync messages
     const recent = msgs.filter((msg) => {
       const ts = Number(msg.messageTimestamp) * 1000;
-      return ts > since;
+      if (ts <= since) return false;
+      if (msg.messageStubType === 2) return false; // decrypt failed — skip
+      const body = extractText(msg);
+      return body !== null; // skip pure media/unknown with no text
     });
 
     if (recent.length === 0) continue;
