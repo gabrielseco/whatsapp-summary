@@ -10,7 +10,7 @@ const fs = require("fs");
 
 const AUTH_FOLDER = process.env.WA_AUTH_FOLDER || ".wa_auth";
 const MSG_STORE_FILE = `${AUTH_FOLDER}/msg_store.json`;
-const SILENT = pino({ level: "silent" });
+const BAILEYS_LOGGER = pino({ level: "warn" });
 
 let sock = null;
 let telegramBot = null;
@@ -117,7 +117,7 @@ async function connect() {
   sock = makeWASocket({
     version,
     auth: state,
-    logger: SILENT,
+    logger: BAILEYS_LOGGER,
     printQRInTerminal: false,
     syncFullHistory: false,
     markOnlineOnConnect: false,
@@ -228,6 +228,8 @@ async function connect() {
 }
 
 function extractText(msg) {
+  // messageStubType 2 = CIPHERTEXT — Baileys failed to decrypt
+  if (msg.messageStubType === 2) return "[decrypt failed]";
   const m = msg.message;
   if (!m) return null;
   return (
