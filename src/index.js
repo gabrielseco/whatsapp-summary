@@ -1,4 +1,19 @@
 require("dotenv").config();
+
+// Suppress verbose multi-line session object dumps from libsignal
+const _consoleInfo = console.info.bind(console);
+console.info = (...args) => {
+  const msg = String(args[0] ?? "");
+  if (
+    msg.startsWith("Closing session:") ||
+    msg.startsWith("Opening session:") ||
+    msg.startsWith("Removing old closed session:") ||
+    msg.startsWith("Migrating session")
+  )
+    return;
+  _consoleInfo(...args);
+};
+
 const https = require("https");
 const express = require("express");
 const { connect, getRecentMessages, setTelegram, isConnected } = require("./whatsapp");
