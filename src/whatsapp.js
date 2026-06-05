@@ -263,9 +263,10 @@ async function getRecentMessages(hoursBack = 24) {
   console.log(`Store has messages for ${msgStore.size} chats`);
 
   for (const [jid, msgs] of msgStore.entries()) {
+    if (jid.endsWith("@lid")) continue; // skip device-sync messages
     const recent = msgs.filter((msg) => {
       const ts = Number(msg.messageTimestamp) * 1000;
-      return ts > since && !msg.key.fromMe;
+      return ts > since;
     });
 
     if (recent.length === 0) continue;
