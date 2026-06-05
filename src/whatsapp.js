@@ -123,16 +123,6 @@ async function connect() {
     markOnlineOnConnect: false,
   });
 
-  sock.ev.on("creds.update", saveCreds);
-
-  sock.ev.on("chats.set", ({ chats }) => storeChats(chats));
-  sock.ev.on("chats.upsert", (chats) => storeChats(chats));
-  sock.ev.on("messaging-history.set", ({ messages, chats }) => {
-    storeChats(chats);
-    storeMessages(messages);
-  });
-  sock.ev.on("messages.upsert", ({ messages }) => storeMessages(messages));
-
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(
       () => reject(new Error("WhatsApp auth timeout after 600s")),
@@ -147,66 +137,91 @@ async function connect() {
       fn(val);
     }
 
-    sock.ev.on("connection.update", async (update) => {
-      const { connection, lastDisconnect, qr } = update;
+    // Resolve 3s after the last incoming message batch, or after 20s max.
+    let quietTimer = null;
+    const done = () => {
+      clearTimeout(quietTimer);
+      console.log("WhatsApp ready");
+      settle(resolve, undefined);
+    };
+    const resetQuiet = () => {
+      clearTimeout(quietTimer);
+      quietTimer = setTimeout(done, 3_000);
+    };
 
-      if (qr) await sendQRToTelegram(qr);
-
-      if (connection === "open") {
-        connected = true;
-        if (qrMessageId) {
-          telegramBot.deleteMessage(telegramChatId, qrMessageId).catch(() => {});
-          qrMessageId = null;
-        }
-        console.log("WhatsApp connected, waiting for message sync...");
-
-        // Resolve 3s after the last incoming message batch, or after 20s max.
-        let quietTimer = null;
-        const done = () => {
-          clearTimeout(quietTimer);
-          console.log("WhatsApp ready");
-          settle(resolve, undefined);
-        };
-        const resetQuiet = () => {
-          clearTimeout(quietTimer);
-          quietTimer = setTimeout(done, 3_000);
-        };
-        sock.ev.on("messages.upsert", resetQuiet);
-        resetQuiet();
-        setTimeout(done, 20_000);
+    sock.ev.process(async (events) => {
+      if (events["creds.update"]) {
+        await saveCreds();
       }
 
-      if (connection === "close") {
-        connected = false;
-        const statusCode = lastDisconnect?.error?.output?.statusCode ?? 500;
-        const loggedOut = statusCode === DisconnectReason.loggedOut;
-        console.warn(`WhatsApp closed (code=${statusCode}, loggedOut=${loggedOut})`);
+      if (events["messaging-history.set"]) {
+        const { chats, messages } = events["messaging-history.set"];
+        console.log(
+          `messaging-history.set: ${chats?.length ?? 0} chats, ${messages?.length ?? 0} messages`,
+        );
+        storeChats(chats);
+        storeMessages(messages);
+      }
 
-        if (!settled) {
+      if (events["chats.upsert"]) {
+        storeChats(events["chats.upsert"]);
+      }
+
+      if (events["messages.upsert"]) {
+        const { messages } = events["messages.upsert"];
+        console.log(`messages.upsert: ${messages?.length ?? 0} messages`);
+        storeMessages(messages);
+        if (!settled) resetQuiet();
+      }
+
+      if (events["connection.update"]) {
+        const { connection, lastDisconnect, qr } = events["connection.update"];
+
+        if (qr) await sendQRToTelegram(qr);
+
+        if (connection === "open") {
+          connected = true;
+          if (qrMessageId) {
+            telegramBot.deleteMessage(telegramChatId, qrMessageId).catch(() => {});
+            qrMessageId = null;
+          }
+          console.log("WhatsApp connected, waiting for message sync...");
+          resetQuiet();
+          setTimeout(done, 20_000);
+        }
+
+        if (connection === "close") {
+          connected = false;
+          const statusCode = lastDisconnect?.error?.output?.statusCode ?? 500;
+          const loggedOut = statusCode === DisconnectReason.loggedOut;
+          console.warn(`WhatsApp closed (code=${statusCode}, loggedOut=${loggedOut})`);
+
+          if (!settled) {
+            if (loggedOut) {
+              fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+            }
+            settle(
+              reject,
+              new Error(loggedOut ? "WhatsApp logged out" : `Connect failed: ${statusCode}`),
+            );
+            return;
+          }
+
           if (loggedOut) {
             fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+            console.error("WhatsApp logged out — restarting for fresh QR scan");
+            process.exit(1);
           }
-          settle(
-            reject,
-            new Error(loggedOut ? "WhatsApp logged out" : `Connect failed: ${statusCode}`),
+
+          setTimeout(
+            () =>
+              connect().catch((e) => {
+                console.error("Reconnect failed:", e.message);
+                process.exit(1);
+              }),
+            5_000,
           );
-          return;
         }
-
-        if (loggedOut) {
-          fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
-          console.error("WhatsApp logged out — restarting for fresh QR scan");
-          process.exit(1);
-        }
-
-        setTimeout(
-          () =>
-            connect().catch((e) => {
-              console.error("Reconnect failed:", e.message);
-              process.exit(1);
-            }),
-          5_000,
-        );
       }
     });
   });
