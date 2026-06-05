@@ -41,21 +41,35 @@ function loadMsgStore() {
 }
 
 let saveTimer = null;
+function flushMsgStore() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  try {
+    const data = {
+      chats: Object.fromEntries(chatMeta),
+      msgs: Object.fromEntries(msgStore),
+    };
+    fs.writeFileSync(MSG_STORE_FILE, JSON.stringify(data));
+  } catch (e) {
+    console.warn("Could not save msg store:", e.message);
+  }
+}
+
 function scheduleSave() {
   if (saveTimer) return;
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    try {
-      const data = {
-        chats: Object.fromEntries(chatMeta),
-        msgs: Object.fromEntries(msgStore),
-      };
-      fs.writeFileSync(MSG_STORE_FILE, JSON.stringify(data));
-    } catch (e) {
-      console.warn("Could not save msg store:", e.message);
-    }
+    flushMsgStore();
   }, 2_000);
 }
+
+// Flush on graceful shutdown so deploys don't lose buffered messages
+process.once("SIGTERM", () => {
+  flushMsgStore();
+  process.exit(0);
+});
 
 function setTelegram(bot, chatId) {
   telegramBot = bot;
