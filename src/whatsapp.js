@@ -102,11 +102,27 @@ async function sendQRToTelegram(qr) {
 function storeChats(chats) {
   for (const chat of chats || []) {
     if (chat.id) {
+      const existing = chatMeta.get(chat.id);
+      const name = chat.name || existing?.name || chat.id.split("@")[0];
       chatMeta.set(chat.id, {
-        name: chat.name || chat.id.split("@")[0],
+        name,
         isGroup: chat.id.endsWith("@g.us"),
       });
     }
+  }
+  scheduleSave();
+}
+
+function storeContacts(contacts) {
+  for (const contact of contacts || []) {
+    if (!contact.id) continue;
+    const name = contact.name || contact.notify || contact.verifiedName;
+    if (!name) continue;
+    const existing = chatMeta.get(contact.id);
+    chatMeta.set(contact.id, {
+      name,
+      isGroup: existing?.isGroup || contact.id.endsWith("@g.us"),
+    });
   }
   scheduleSave();
 }
@@ -179,6 +195,32 @@ async function connect() {
 
       if (events["chats.upsert"]) {
         storeChats(events["chats.upsert"]);
+      }
+
+      if (events["contacts.upsert"]) {
+        storeContacts(events["contacts.upsert"]);
+      }
+
+      if (events["contacts.update"]) {
+        storeContacts(events["contacts.update"]);
+      }
+
+      if (events["groups.upsert"]) {
+        for (const group of events["groups.upsert"]) {
+          if (group.id && group.subject) {
+            chatMeta.set(group.id, { name: group.subject, isGroup: true });
+          }
+        }
+        scheduleSave();
+      }
+
+      if (events["groups.update"]) {
+        for (const group of events["groups.update"]) {
+          if (group.id && group.subject) {
+            chatMeta.set(group.id, { name: group.subject, isGroup: true });
+          }
+        }
+        scheduleSave();
       }
 
       if (events["messages.upsert"]) {
@@ -256,7 +298,32 @@ function extractText(msg) {
   );
 }
 
+async function resolveGroupNames() {
+  if (!sock) return;
+  const promises = [];
+  for (const [jid, meta] of chatMeta.entries()) {
+    if (!meta.isGroup) continue;
+    if (meta.name && meta.name !== jid.split("@")[0]) continue;
+    promises.push(
+      sock
+        .groupMetadata(jid)
+        .then((gm) => {
+          if (gm.subject) {
+            chatMeta.set(jid, { name: gm.subject, isGroup: true });
+          }
+        })
+        .catch(() => {}),
+    );
+  }
+  if (promises.length) {
+    await Promise.all(promises);
+    scheduleSave();
+    console.log(`Resolved ${promises.length} group names`);
+  }
+}
+
 async function getRecentMessages(hoursBack = 24) {
+  await resolveGroupNames();
   const since = Date.now() - hoursBack * 60 * 60 * 1000;
   const results = [];
 
@@ -274,10 +341,15 @@ async function getRecentMessages(hoursBack = 24) {
 
     if (recent.length === 0) continue;
 
-    const meta = chatMeta.get(jid) || {
-      name: jid.split("@")[0],
-      isGroup: jid.endsWith("@g.us"),
-    };
+    let meta = chatMeta.get(jid);
+    if (!meta || meta.name === jid.split("@")[0]) {
+      const pushName = recent.find((m) => !m.key.fromMe && m.pushName)?.pushName;
+      meta = {
+        name: pushName || meta?.name || jid.split("@")[0],
+        isGroup: jid.endsWith("@g.us"),
+      };
+      if (pushName) chatMeta.set(jid, meta);
+    }
 
     results.push({
       chatName: meta.name,
