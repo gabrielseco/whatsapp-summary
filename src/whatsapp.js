@@ -8,20 +8,11 @@ const QRCode = require("qrcode");
 const pino = require("pino");
 const fs = require("fs");
 
+const { resolve: resolveAlias } = require("./aliases");
+
 const AUTH_FOLDER = process.env.WA_AUTH_FOLDER || ".wa_auth";
 const MSG_STORE_FILE = `${AUTH_FOLDER}/msg_store.json`;
 const BAILEYS_LOGGER = pino({ level: "warn" });
-
-// NAME_OVERRIDES env: comma-separated "old:new" pairs, e.g. "3G:Guillermo,Xyz:Alice"
-const nameOverrides = new Map();
-for (const pair of (process.env.NAME_OVERRIDES || "").split(",").filter(Boolean)) {
-  const idx = pair.indexOf(":");
-  if (idx > 0) nameOverrides.set(pair.slice(0, idx).trim(), pair.slice(idx + 1).trim());
-}
-
-function applyNameOverride(name) {
-  return nameOverrides.get(name) || name;
-}
 
 let sock = null;
 let telegramBot = null;
@@ -363,7 +354,7 @@ async function getRecentMessages(hoursBack = 24) {
     }
 
     results.push({
-      chatName: applyNameOverride(meta.name),
+      chatName: resolveAlias(meta.name),
       isGroup: meta.isGroup,
       messages: recent.map((msg) => {
         const ts = Number(msg.messageTimestamp) * 1000;
@@ -371,7 +362,7 @@ async function getRecentMessages(hoursBack = 24) {
         const rawFrom = msg.key.fromMe
           ? "Me"
           : msg.pushName || senderJid?.split("@")[0] || "Unknown";
-        const from = msg.key.fromMe ? rawFrom : applyNameOverride(rawFrom);
+        const from = msg.key.fromMe ? rawFrom : resolveAlias(rawFrom);
         return {
           from,
           body: extractText(msg) || "[Media]",
@@ -388,4 +379,13 @@ async function getRecentMessages(hoursBack = 24) {
   return results;
 }
 
-module.exports = { connect, getRecentMessages, setTelegram, isConnected };
+function getKnownNames() {
+  const names = [];
+  for (const [jid, meta] of chatMeta.entries()) {
+    if (jid.endsWith("@lid")) continue;
+    names.push({ jid, name: meta.name, isGroup: meta.isGroup });
+  }
+  return names.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+module.exports = { connect, getRecentMessages, setTelegram, isConnected, getKnownNames };

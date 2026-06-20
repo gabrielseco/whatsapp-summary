@@ -16,9 +16,15 @@ console.info = (...args) => {
 
 const https = require("https");
 const express = require("express");
-const { connect, getRecentMessages, setTelegram, isConnected } = require("./whatsapp");
+const {
+  connect,
+  getRecentMessages,
+  setTelegram,
+  isConnected,
+  getKnownNames,
+} = require("./whatsapp");
 const { summarize } = require("./summarizer");
-const { createBot, sendSummary, sendMessage } = require("./telegram");
+const { createBot, setupCommands, sendSummary, sendMessage } = require("./telegram");
 
 const app = express();
 app.use(express.json());
@@ -32,6 +38,7 @@ function requireAuth(req, res, next) {
 }
 
 const bot = createBot();
+setupCommands(getKnownNames);
 setTelegram(bot, process.env.TELEGRAM_CHAT_ID);
 
 const whatsappReady = connect();
