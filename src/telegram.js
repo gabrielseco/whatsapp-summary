@@ -23,11 +23,15 @@ function setupCommands(getKnownNames) {
       return;
     }
     const current = aliases.getAll();
-    const lines = known.map((c) => {
+    const seen = new Set();
+    const lines = [];
+    for (const c of known) {
+      if (seen.has(c.name)) continue;
+      seen.add(c.name);
       const type = c.isGroup ? "👥" : "👤";
       const alias = current[c.name];
-      return alias ? `${type} ${c.name} → *${alias}*` : `${type} ${c.name}`;
-    });
+      lines.push(alias ? `${type} ${c.name} → *${alias}*` : `${type} ${c.name}`);
+    }
     const text = `*Known contacts/groups:*\n${lines.join("\n")}`;
     bot.sendMessage(chatId, text, { parse_mode: "Markdown" });
   });
